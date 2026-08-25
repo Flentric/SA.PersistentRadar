@@ -4,7 +4,7 @@
 #include "CStreaming.h"
 #include "CStreamingInfo.h"
 #include "CCutsceneMgr.h"
-#include "CTimer.h"
+#include <windows.h>
 
 using namespace plugin;
 
@@ -19,8 +19,7 @@ static const uintptr_t ADDR_REMOVE_MAP_SECTION    = 0x584BB0;
 class PersistentRadar {
 public:
     static bool patched;
-    static bool preloaded;
-    static unsigned int nextCheck;
+    static unsigned int lastCheck;
 
     static int TileStreamId(int i) {
         int slot = gRadarTxdIds[i];
@@ -55,33 +54,23 @@ public:
         if (!patched || !TilesRegistered())
             return;
 
-        if (CCutsceneMgr::ms_running) {
-            preloaded = false;
+        unsigned int now = GetTickCount();
+        if (now - lastCheck < CHECK_INTERVAL_MS)
             return;
-        }
+        lastCheck = now;
 
-        unsigned int now = CTimer::m_snTimeInMillisecondsPauseMode;
+        if (CountMissing() == 0)
+            return;
 
-        if (!preloaded) {
-            RequestAll();
+        RequestAll();
+
+        if (!CCutsceneMgr::ms_running)
             CStreaming::LoadAllRequestedModels(false);
-            preloaded = true;
-            nextCheck = now + CHECK_INTERVAL_MS;
-            return;
-        }
-
-        if (now < nextCheck)
-            return;
-        nextCheck = now + CHECK_INTERVAL_MS;
-
-        if (CountMissing() > 0)
-            RequestAll();
     }
 };
 
 bool PersistentRadar::patched = false;
-bool PersistentRadar::preloaded = false;
-unsigned int PersistentRadar::nextCheck = 0;
+unsigned int PersistentRadar::lastCheck = 0;
 
 class PersistentRadarPlugin {
 public:
